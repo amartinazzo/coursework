@@ -1,0 +1,4 @@
+*.pyc
+__pycache/__*
+.DS_Store
+*.sav
