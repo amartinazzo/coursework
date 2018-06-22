@@ -35,3 +35,12 @@ http://amunategui.github.io/smote/
 https://machinelearningmastery.com/k-fold-cross-validation/
 
 https://www.quora.com/In-classification-how-do-you-handle-an-unbalanced-training-set
+
+xxxx
+
+random forests
+f1 scores:  [0.34265790895547443, 0.9788639308748467, 0.9792302324774895, 0.982466171711103, 0.9812171285015956, 0.9820884219904229, 0.984577400660203, 0.9827105772143147] ; mean:  0.9017264715481812
+
+xxxx
+
+http://scikit-learn.org/stable/auto_examples/model_selection/plot_nested_cross_validation_iris.html#sphx-glr-auto-examples-model-selection-plot-nested-cross-validation-iris-py

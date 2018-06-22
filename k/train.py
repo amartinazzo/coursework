@@ -3,8 +3,9 @@ import numpy as np
 import pandas as pd
 import pickle
 from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier
+from sklearn.grid_search import GridSearchCV
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import f1_score, roc_auc_score
+from sklearn.metrics import f1_score, make_scorer, roc_auc_score
 from sklearn.model_selection import cross_val_score, StratifiedKFold
 from sklearn.svm import SVC
 
@@ -26,7 +27,7 @@ cat_features = [
 ]
 
 # receives a csv file and return features and labels np arrays
-def pre_process_data(filename):
+def pre_process_data(filename, labeled=False):
 	print('\npre-processing ', filename)
 
 	features = pd.read_csv(filename)
@@ -35,7 +36,6 @@ def pre_process_data(filename):
 
 	# do one-hot encoding for categorical features
 	# done by hand to assert dimension of each hot-encoded feat
-
 	for feat in cat_features:
 		# print('one-hot encoding ', feat[0])
 		one_hot = pd.get_dummies(features[feat[0]], prefix=feat[0])
@@ -54,38 +54,46 @@ def pre_process_data(filename):
 	dim_final = features.shape[1]
 	assert dim_final == dim_orig + 45
 
-	# retrieve labels from features
-
-	if 'y' in features:
-		labels = np.array(features['y'])
-		features = features.drop('y', axis=1)
-	else:
-		labels = None
-
 	print('shape after one-hot encoding: ', features.shape)
 
-	# oversample to avoid imbalance
+	if labeled:
+		# retrieve labels from features
+		labels = np.array(features['y'])
+		features = features.drop('y', axis=1)
 
-	sm = SMOTE(random_state=42)
-	features, labels = sm.fit_sample(features, labels)
-	unique, counts = np.unique(labels, return_counts=True)
-	assert counts[0] == counts[1]
-
-	print('shape after oversampling: ', features.shape)
+		# oversample to avoid imbalance
+		sm = SMOTE(random_state=42)
+		features, labels = sm.fit_sample(features, labels)
+		unique, counts = np.unique(labels, return_counts=True)
+		assert counts[0] == counts[1]
+		print('shape after oversampling: ', features.shape)
+	else:
+		labels = None
 
 	return np.array(features), labels
 
 
-def train_model(model, k, X, y):
-	kfolds = StratifiedKFold(k)
-	scores = []
-	for train_idx, test_idx in kfolds.split(X, y):
-		X_train, y_train = X[train_idx], y[train_idx]
-		X_test, y_test = X[test_idx], y[test_idx]
-		model = model.fit(X_train, y_train)
-		y_hat = model.predict(X_test)
-		scores.append(f1_score(y_test, y_hat))
-	print('f1 scores: ', scores, '; mean: ', np.mean(scores))
+def train_model(model, k, X, y, hyperparams):
+	f1_weighted = make_scorer(f1_score, average='weighted')
+	clf = GridSearchCV(estimator=model, param_grid=hyperparams, cv=k, scoring=f1_weighted)
+	# uses stratified kfolds (binary classification)
+	model = clf.fit(X, y)
+	print('model_score: ', clf.best_score_)
+	print(clf.cv_results_)
+
+	print('\n\noi')
+
+	print('\n\noi 2')
+
+	# kfolds = StratifiedKFold(k)
+	# scores = []
+	# for train_idx, test_idx in kfolds.split(X, y):
+	# 	X_train, y_train = X[train_idx], y[train_idx]
+	# 	X_test, y_test = X[test_idx], y[test_idx]
+	# 	model = model.fit(X_train, y_train)
+	# 	y_hat = model.predict(X_test)
+	# 	scores.append(f1_score(y_test, y_hat, average='weighted'))
+	# print('f1 scores: ', scores, '; mean: ', np.mean(scores))
 	
 
 def eval_model(model, X, y):
@@ -97,32 +105,38 @@ if __name__ == "__main__":
 
 	# read data
 
-	X_train, y_train = pre_process_data('train.csv')
+	X_train, y_train = pre_process_data('train.csv', labeled=True)
 
 	#### dataset is unbalanced!!!
 	## y=1 -> 12% of points
 
 	# initialize models
 
-	rf = RandomForestClassifier(n_estimators = 500, random_state = 42)
-	adaboost = AdaBoostClassifier(rf, n_estimators=200, learning_rate=0.1)
-	lr = LogisticRegression()
+	# gridsearch pra otimizar hiperparametros??
+
+	rf = RandomForestClassifier(random_state = 42)
+	hyperparams = {
+		'class_weight': [{0:1, 1:10}, {0:1, 1:100}, {0:1, 1:200}, {0:1, 1:400}, {0:1, 1:1000}],
+		'n_estimators': [100, 200, 500, 1000]
+		}
+	# adaboost = AdaBoostClassifier(rf, n_estimators=200, learning_rate=0.1)
+	# lr = LogisticRegression(class_weight={0:1, 1:200})
 	# svm = SVC()
 
 	# train with cross-validation
 
-	k = 10
+	k = 8
 
-	print('\nadaboost')
-	train_model(adaboost, k, X_train, y_train)
-	print('\nlogistic regression')
-	train_model(lr, k, X_train, y_train)
 	print('\nrandom forests')
-	train_model(rf, k, X_train, y_train)
+	train_model(rf, k, X_train, y_train, hyperparams)
+	# print('\nadaboost')
+	# train_model(adaboost, k, X_train, y_train)
+	# print('\nlogistic regression')
+	# train_model(lr, k, X_train, y_train)
 
 	# save models
 
-	pickle.dump(adaboost, open('adaboost.sav', 'wb'))
-	pickle.dump(rf, open('rf.sav', 'wb'))
-	pickle.dump(lr, open('lr.sav', 'wb'))
+	pickle.dump(rf, open('rf_gridsearch.sav', 'wb'))
+	# pickle.dump(adaboost, open('adaboost.sav', 'wb'))
+	# pickle.dump(lr, open('lr.sav', 'wb'))
 	# pickle.dump(svm, open('svm.sav', 'wb'))
