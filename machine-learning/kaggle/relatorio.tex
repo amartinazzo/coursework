@@ -1,0 +1,155 @@
+\documentclass[12pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[brazil]{babel}
+\usepackage{listings}
+\usepackage{geometry}
+\usepackage[usenames,dvipsnames]{xcolor}
+
+\geometry{
+a4paper,
+total={170mm,257mm},
+% left=20mm,
+top=25mm,
+bottom=30mm,
+}
+
+\lstset{
+basicstyle=\ttfamily, 
+columns=fullflexible, % make sure to use fixed-width font, CM typewriter is NOT fixed width
+numbers=none, %numbers=left 
+numberstyle=\small\ttfamily\color{Gray},
+stepnumber=1,              
+% numbersep=10pt, 
+numberfirstline=true, 
+numberblanklines=true, 
+tabsize=4,
+lineskip=-1.5pt,
+extendedchars=true,
+breaklines=true,        
+keywordstyle=\color{RoyalBlue},
+identifierstyle=, % using emph or index keywords
+commentstyle=\color{Gray},
+stringstyle=\color{Maroon},
+showstringspaces=false,
+showtabs=false,
+upquote=false,
+texcl=true % interpet comments as LaTeX
+}
+
+\pagenumbering{gobble}
+
+\title{Competição de MAC5832: Predizendo o sucesso de campanhas de telemarketing}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+    Neste breve relatório, será apresentada a abordagem usada para desenvolver um modelo de aprendizagem que deve predizer se uma campanha de telemarketing terá sucesso para um dado cliente. Tal modelo foi treinado a partir de um conjunto de dados simplificado do artigo \emph{``A  data-driven  approach  to  predict  the  success  of  bank  telemarketing''}. Os resultados foram submetidos para a competição \emph{MAC5832 2018} no Kaggle.
+\end{abstract}
+
+\section{Introdução}
+
+Aprendizado de máquina pode ser uma disciplina bastante útil para auxiliar na tomada de decisões de negócios. Mais especificamente, algoritmos de aprendizado podem ser utilizados em campanhas de telemarketing para prever que perfis de cliente são mais propensos a aceitar uma oferta por telefone, otimizando o tempo e o custo das ligações de marketing. Aqui, serão analisados dados coletados de um banco português entre 2008 e 2013. O conjunto de dados original era composto por 150 características que descrevem o cliente, suas condições socio-econômicas e o produto ofertado. A partir delas, foi feita uma seleção de características semi-automática, reduzindo o conjunto de dados para uma versão simplificada de 22 características. Este trabalho foi feito com base nesta versão simplificada.
+
+O trabaho foi dividido em quatro estágios: pré-processamento dos dados, selecão de modelo, treinamento, e resultados. No pré-processamento dos dados, foram tratadas as variáveis categórias e a distribuição entre as classes. Na seleção de modelo, são comparados os desempenhos de três algoritmos pré-escolhidos: Regressão Logística, \emph{Random Forests} e Máquina de Vetores de Suporte. Na seção de treinamento, é explicada a abordagem para treinar e validar o modelo escolhido. Na seção de resultados, por fim, é mostrado o desempenho do modelo final, e depois são mencionadas algumas melhorias que podem ser feitas.
+
+\section{Pré-processamento dos dados}
+
+O conjunto de dados de treinamento possui 36245 amostras, cada uma com 20 variáveis de entrada (características) e uma variável de saída binária (resposta). Antes de usá-los para treinar qualquer modelo, é importante fazer uma análise exploratória a fim de entender possíveis ``armadilhas'' e mitigá-las. Neste conjunto de dados, há duas questões que precisam ser tratadas e que serão detalhadas a seguir: as variáveis categóricas e o desbalanceamento de classes.
+
+Após cada estágio de processamento, foram incluídos testes simples usando \texttt{assert} para garantir que as dimensões resultantes eram as esperadas.
+
+\subsection{Variáveis categóricas}
+
+Dentre as 20 variáveis do conjunto de dados, 10 são categóricas. Isto significa que elas não são representadas por valores numéricos, mas sim por categorias. Por exemplo, a variável \texttt{marital} indica o estado civil do cliente e possui quatro categorias possíveis: \texttt{'divorced', 'married', 'single', 'unknown'}. O modelo de aprendizagem, entretanto, só pode receber números. Uma solução simples seria substituir cada uma das categorias por um inteiro - neste caso, por inteiros entre 1 e 4. Isto não seria adequado, pois inteiros pressupõem uma ordenação que não existe nas categorias. Em outras palavras, o modelo poderia assumir, por exemplo, que \texttt{'single'} é maior do que \texttt{'married'}, o que não tem significado algum. Isto poderia prejudicar a capacidade de predição do modelo.
+
+Para contornar este problema, é feito o \emph{one-hot encoding} das variáveis categóricas. O \emph{one-hot encoding} consiste de transformar cada uma das categorias em uma variável binária separada, e pode ser facilmente feito com funções auxiliares do pacote \texttt{pandas}. Com \emph{one-hot encoding}, o estado civil de um cliente solteiro seria representado por:
+
+\begin{center}
+\begin{tabular}{c|c|c|c}
+marital\_divorced & marital\_married & marital\_single & marital\_unknown \\
+\hline
+0 & 0 & 1 & 0 \\
+\end{tabular}
+\end{center}
+
+Mesmo para as variáveis que possuem apenas duas categorias, que poderiam transformadas em uma variável binária (como \texttt{contact}, que tem as categorias \texttt{'cellular', 'telephone'}), optou-se por fazer \emph{one-hot encoding} para minimizar as chances de o modelo extrair alguma informação inadequada sobre a relevância de cada categoria.
+
+Após o \emph{one-hot encoding}, a dimensão do vetor de características aumentou de 20 para 65.
+
+Além das variáveis categórias, a variável \texttt{age} também foi modificada. As idades foram divididas por dez e arredondadas para o inteiro mais próximo, a fim de separá-las em faixas etárias. Nesse caso, \emph{one-hot encoding} não foi necessário pois os valores numéricos e a ordenação fazem sentido.
+
+\subsection{Balanceamento de classes}
+
+Dos dados que foram recebidos para treinamento, apenas cerca de 12\% têm rótulo positivo, correspondente a clientes que aceitaram a proposta que lhes foi feita em campanhas de telemarketing. Este desbalanceamento entre exemplos negativos e positivos pode fazer com que o modelo aprenda mais sobre a classe predominante e classifique clientes que aceitariam uma proposta como clientes que a rejeitariam. Considerando que o objetivo do modelo de predição é maximizar o sucesso das campanhas de telemarketing, esta situação - falso negativo - seria fortemente indesejada. Para evitar que isto aconteça, há duas abordagens possíveis: (i) modelar o problema como detecção de ocorrências raras (que fugiria do escopo proposto aqui), (ii) balancear a distribuição dos dados através de sobreamostragem (\emph{oversampling}) da classe minoritária, ou subamostragem (\emph{downsampling}) da classe majoritária.
+
+A abordagem mais comum é a sobreamostragem, pois ela resulta numa quantidade maior de dados, o que contribui para a capacidade de generalização do modelo. Esta foi a abordagem escolhida nesta implementação. A técnica usada para sobreamostrar o conjunto de dados foi a SMOTE (\emph{Synthetic Minority Over-sampling Technique}), disponível no pacote \texttt{imblearn}. Esta técnica gera pontos sintéticos da seguinte forma: tomado um ponto do conjunto de dados, são considerados seus $k$ vizinhos mais próximos no espaço de características. É escolhido um desses $k$ vizinhos, e computado o vetor entre ele e o ponto. Então, para criar o ponto sintético, este vetor é multiplicado por um número aleatório entre zero e adicionado ao ponto.
+
+Após a sobreamostragem dos dados, a quantidade de amostras aumentou de 36245 para 64344.
+
+\section{Seleção de modelo}
+
+Foram escolhidos três algoritmos de aprendizado para avaliar o desempenho de cada um deles sobre o conjunto de dados já pré-processado: Regressão Logística, \emph{Random Forests} e Máquina de Vetores de Suporte (SVM).
+
+Regressão Logística é um modelo linear clássico e de fácil interpretação; é recomendável tentar ajustar o problema com ele antes de partir para modelos mais complexos. \emph{Random Forests} é um modelo de agregação (\emph{emsamble}) formado pela combinação de múltiplas árvores de decisão; por ser derivado de um modelo simples, é possível extrair interpreções das \emph{Random Forests} após algumas manipulações. Já a Máquina de Vetores de Suporte é um outro modelo clássico, um pouco mais complexo e bem robusto, que constrói um hiperplano que separa os dados de cada classe. Com estes três modelos, há bastante diversidade de funcionalidades.
+
+Os algoritmos foram avaliados usando o método \texttt{cross\_val\_score} do pacote \texttt{sklearn}. Tal método faz uma validação cruzada em \emph{3-folds} e retorna uma lista com a pontuação em cada rodada. Foi adotado como métrica de desempenho o \emph{F1 Score} ponderado de acordo com a proporção das classes, equivalente à pontuação usada na competição do Kaggle. Além disso, foi computado o tempo de treinamento. Os resultados são apresentados a seguir.
+
+\begin{lstlisting}
+random forests
+elapsed time:  0.43716100000000013
+k-fold f1 scores:  [0.76464152 0.96649682 0.73699044] ; mean:  0.8227095953651649
+
+logistic regression
+elapsed time:  0.40009600000000045
+k-fold f1 scores:  [0.66666667 0.66666667 0.66666667] ; mean:  0.6666666666666666
+\end{lstlisting}
+
+Nota-se que o modelo mais rápido é Regressão Logística, mas o mais preciso é \emph{Random Forests}. Já o treinamento da SVM foi interrompido antes de terminar, pois seu tempo de execução já estava ordens de grandeza maior do que os outros dois modelos. Isto pode ser explicado pela complexidade da programação quadrática usada na SVM, que é da ordem de $n^{3}$ (onde n é o tamanho do conjunto de treinamento).
+
+A baixa pontuação da regressão logística pode ter sido devido às ordens de grandeza muito diversas nas características (é possível, por exemplo, que o modelo tenha dado muita ênfase à variável \texttt{nr.employeed}, que é da ordem de $10^{3}$). Talvez isso pudesse ser resolvido normalizando os dados. \emph{Random Forests} não tem essa limitação quanto aos intervalos de cada característica, pois as árvores são construídas encontrando valores de corte para cada característica de forma independente. Assim, \emph{Random Forests} foi selecionado por ser mais robusto ao 'formato' dos dados e, consequentemente, requerer menos pré-processamento.
+
+\section{Treinamento e validação}
+
+O modelo selecionado foi treinado usando validação cruzada k-fold estratificada. Tal método consiste em particionar o conjunto de dados em $k$ subconjuntos disjuntos e ajustar o modelo $k$ vezes. A cada rodada, um subconjunto diferente é usado para validação, e os $k-1$ subconjuntos restantes são usados para treinamento. A estratificação dos dados rearranja os dados de forma a garantir que cada partição seja uma boa representação do conjunto de dados inteiro. Em outras palavras, a estratificação procura manter a proporção entre classes aproximadamente constante em todas as partições.
+
+Foi escrita uma função de treinamento que recebe como parâmetros o modelo $model$ a ser treinado, a quantidade de rodadas $k$, as variáveis de entrada $X$ e a variável-alvo $y$:
+
+\begin{lstlisting}[language=Python]
+def train_model(model, k, X, y):
+	kfolds = StratifiedKFold(k)
+	scores = []
+	for train_idx, test_idx in kfolds.split(X, y):
+	    X_train, y_train = X[train_idx], y[train_idx]
+	    X_test, y_test = X[test_idx], y[test_idx]
+	    model = model.fit(X_train, y_train)
+	    y_hat = model.predict(X_test)
+	    scores.append(f1_score(y_test, y_hat, average='weighted'))
+	print('f1 scores: ', scores, '; mean: ', np.mean(scores))
+\end{lstlisting}
+
+O valor de $k$ foi variado entre 3 e 10 e se verificou que, para valores maiores do que 5, o tempo de treinamento aumenta significamente e não há ganho no \emph{F1 Score}. Na verdade, se o $k$ aumenta muito, há uma pequena queda em \emph{F1 Score}, o que pode indicar sobreajuste (\emph{overfitting}).  Por isso, foi escolhido $k=5$.
+
+Alguns valores diferentes para os hiperparâmetros do modelo também foram variados buscando maximizar \emph{F1 Score}. Os seguintes resultados foram obtidos usando \texttt{n\_estimators=200} (número de árvores de decisão) e \texttt{class\_weight=\{1:100\}} (magnitude da penalização para erros da classe positiva):
+
+\begin{lstlisting}[language=Python]
+random forests
+f1 scores:  [0.6501338748953901, 0.9755099904565653, 0.9768300101333328, 0.9760509360775623, 0.9557751402284679] ; mean:  0.9068599903582637
+\end{lstlisting}
+
+% f1 scores:  [0.6498179878164191, 0.9777671035327352, 0.9793980614051981, 0.9770630226693935, 0.97301493245783] ; mean:  0.9114122215763152
+
+\section{Resultados e conclusões}
+
+O modelo treinado foi usado para prever as respostas de um novo conjunto de dados contendo 9062 pontos. Estas predições foram então submetidas para a competição no Kaggle e obtiveram \emph{F1 Score} de 0.90544. Observando que a pontuação de treinamento e validação foi bem próxima da pontuação de teste no Kaggle (que seria equivalente ao erro \emph{out-of-bag}), pode se concluir que o modelo está generalizando razoavelmente bem.
+
+O treinamento poderia ser aprimorado buscando hiperparâmetros ótimos automaticamente ao invés de testar valores diferentes manualmente. Isto poderia ser feito com a função \texttt{GridSearchCV} do \texttt{sklearn}, que faz uma busca em grade (a partir de um conjunto de valores discretos pré-determinados) nos hiperparâmetros e avalia o desempenho para cada combinação. Este método é bem mais caro computacionalmente, então, de qualquer forma, é necessário fazer uma pré-seleção manual.
+
+% Outra possível melhoria seria fazer uma análise de sensibilidade, adicionando pequenas perturbações às características para observar o quanto cada uma delas influencia a resposta.
+
+% \bibliographystyle{apalike}
+% \bibliography{refs}
+
+\end{document}

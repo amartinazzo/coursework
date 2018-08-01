@@ -1,0 +1,40 @@
+Mini EP 1: Utilização das Memórias Cachês
+
+Sabe-se que, na linguagem C, vetores multidimensionais são alocados na memória sequencialmente ao longo das linhas. Isso significa que uma matriz bidimensional A[M][N] é alocada como se fosse um vetor unidimensional V[M*N]. O elemento j da segunda linha seria acessado em V[N + j], o elemento j da terceira linha em V[2*N + j], e assim por diante. O princípio da localidade espacial diz que, se um dado foi acessado recentemente, é provável que outros dados em endereços próximos sejam acessados. Esses dados ficam armazenados no cachê até que sejam sobrescritos por outros processos. Quando um elemento na matriz A é acessado, um "pedaço" da linha em torno desse elemento fica disponível no cachê, acelerando iterações ao longo das linhas.
+
+Foi feito um programa em C que calcula a multiplicação de duas matrizes quadradas A e B de dimensão N de dois modos. O primeiro modo é o mais simples possível: ele usa três laços aninhados sem qualquer otimização. No laço interno (cuja variável de iteração é k), é calculado A[i][k]*B[k][j]. Nesse caso, os elementos de A são iterados na direção das linhas e os elementos de B na direção das colunas. No segundo modo, é feita uma pequena mudança: calcula-se a transposta de B, de forma que o cálculo do laço interno fique A[i][k]*B'[j][k]. Assim, ambas as matrizes são acessadas ao longo das linhas. Além disso, a matriz que recebe os resultados elemento a elemento também é acessada ao longo das linhas.
+
+Para matrizes pequenas, os tempos de execução foram equivalentes, já que as matrizes inteiras podem ficar armazenadas no cachê. O ganho em desempenho aumenta com a dimensão. Para N=512, a multiplicação com B' foi cerca de 20% mais rápida. Para N=1024, o ganho foi da ordem de 100% - ou seja, a versão otimizada rodou na metade do tempo.
+
+Abaixo, é mostrado um monitoramento feito com o utilitário perf (disponível para Linux), no qual foram contadas as quantidades de loads, misses e stores no primeiro nível de cachê. Nota-se que a multiplicação com transposta tem uma taxa de misses/loads bem mais baixa. Já a quantidade um pouco maior de loads e stores é devido ao cálculo da matriz transposta.
+
+
+----
+
+Anexo: exemplo de saída do comando make perf
+
+perf stat -r 10 -B -e L1-dcache-loads,L1-dcache-load-misses,L1-dcache-stores ./mini-ep1-main 0
+N = 512
+multiplicação simples:
+tempo: 3.0e+00
+
+ Performance counter stats for './mini-ep1-main 0' (10 runs):
+
+     2.833.441.650      L1-dcache-loads                                               ( +-  0,00% )
+       157.497.860      L1-dcache-load-misses     #    5,56% of all L1-dcache hits    ( +-  0,17% )
+       276.005.287      L1-dcache-stores                                              ( +-  0,00% )
+
+       3,060723911 seconds time elapsed                                          ( +-  0,57% )
+
+perf stat -r 10 -B -e L1-dcache-loads,L1-dcache-load-misses,L1-dcache-stores ./mini-ep1-main 1
+N = 512
+multiplicação com B':
+tempo: 2.6e+00
+
+ Performance counter stats for './mini-ep1-main 1' (10 runs):
+
+     2.839.132.116      L1-dcache-loads                                               ( +-  0,00% )
+         9.555.820      L1-dcache-load-misses     #    0,34% of all L1-dcache hits    ( +-  0,10% )
+       277.006.623      L1-dcache-stores                                              ( +-  0,00% )
+
+       2,564806645 seconds time elapsed                                          ( +-  0,22% )

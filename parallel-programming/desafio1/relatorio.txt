@@ -1,0 +1,7 @@
+Mini EP 1: Branch (mis)prediction
+
+Foi feito um programa em C que inicializa um vetor V de tamanho N com valores aleatórios entre zero e N, e soma os elementos cujos valores forem maiores que um dado valor limite (threshold). Para isso, é necessário varrer o vetor inteiro, comparando o valor de cada elemento com o valor limite (if V[i] > threshold), o que gera uma quantidade de desvios da ordem de N.
+
+Durante a execução do programa, o mecanismo de predição de desvio tenta acertar se o desvio deverá ser tomado ou não com base num histórico. Como os elementos do vetor foram inicializados aleatoriamente, é difícil encontrar um padrão no histórico ao varrê-lo. Para tornar a predição de desvio mais eficiente, uma das alternativas é ordenar o vetor. Assim, o padrão se torna trivial: ao varrer V, nunca se toma o desvio até que se encontre o primeiro elemento maior que o valor limite; a partir desse elemento, sempre se toma o desvio. Nesse caso, se plotássemos os desvios (1 se toma o desvio; 0 se não toma) em função da variável de iteração i, encontraríamos uma distribuição bem definida, na forma de uma função degrau.
+
+Observou-se que a diferença entre os tempos de execução é máxima quando o valor limite é N/2, ou seja, a mediana de V. Nesse caso, a soma num vetor ordenado chega a ser três vezes mais rápida do que num vetor desordenado. Vale ressaltar que o tempo de execução do algoritmo de ordenação não foi incluído nessa medida, pois queríamos observar o efeito da predição de desvio isoladamente.

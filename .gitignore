@@ -1,5 +1,14 @@
-k/submission.csv
+*.aux
+*.dvu
+*.log
+*.pickle
+*.pdf
 *.pyc
-__pycache/__*
-.DS_Store
 *.sav
+*.zip
+
+*/artigos/*
+*/__pycache/__*
+.DS_Store
+submission*.csv
+teste*.csv

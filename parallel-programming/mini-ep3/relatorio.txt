@@ -1,0 +1,40 @@
+EP 3: Contenção
+
+O script "contention.sh" recebe como parâmetros um tamanho de vetor e um número de threads. Ele compila e roda um programa em C que deve encontrar o valor máximo de um vetor do tamanho dado utilizando o número de threads dado. Para tentar minimizar o problema de contenção, são inseridos múltiplos ifs aninhados antes de entrar na região crítica. Assim, apenas threads que de fato tenham encontrado um novo valor máximo precisam entrar na região crítica para atualizar o valor máximo. O script compila e roda o programa variando a quantidade de ifs entre 0 e 9.
+
+Fixados um tamanho de vetor e um número de threads arbitrários, o programa foi executado 1000 vezes. Em cada rodada, foram coletados os números de ifs do melhor e do pior tempo de execução. Para isso, foi necessário modificar a função run_for_if em "contention.sh" e escrever um script adicional que executa "contention.sh" num laço e depois computa as frequências dos melhores e piores tempos. Para vector_size=1000 e num_threads=20, as frequências encontradas foram:
+
+melhor tempo de execução
+n_ifs	frequência
+0		0.006
+1		0.118
+2		0.115
+3		0.115
+4		0.118
+5		0.105
+6		0.099
+7		0.116
+8		0.112
+9		0.098
+
+pior tempo de execução
+n_ifs	frequência
+0	    0.159
+1	    0.108
+2	    0.101
+3	    0.085
+4	    0.094
+5	    0.072
+6	    0.104
+7	    0.091
+8	    0.093
+9	    0.095
+
+Nota-se que n_ifs=0 tem frequência quase nula de melhor tempo, e frequência de pior tempo 50% maior que o segundo pior caso (n_ifs=1). Logo, n_ifs=0 apresenta o pior desempenho. E, para n_ifs>0, a distribuição de frequências se aproxima de uma distribuição uniforme. Então, podemos concluir que é vantajoso incluir um if fora da seção crítica e que, para mais do que um if, não são garantidas melhoras significativas.
+
+Uma outra análise havia sido feita variando o tamanho do vetor e o número de threads. Foram coletados conjuntos de dados com três variáveis de entrada (vector_size, num_threads, n_ifs) e uma variável de resposta (avg_time), fixados os intervalos e os passos de vector_size e num_threads. Então, foram feitas regressões lineares múltiplas considerando variáveis de interação:
+
+avg_time(useconds) = c0 + c1*vector_size + c2*num_threads + c3*n_ifs + 
+	c4*vector_size*num_threads + c5*vector_size*n_ifs + c6*n_ifs*num_threads
+
+Um resultado consistente foi que o valor encontrado para c3 era negativo (ou seja, o tempo de execução cai quando n_ifs aumenta). Esse resultado é coerente com a observação de que n_ifs=0 tem o pior desempenho. Além disso, foi possível observar que os coeficientes das variáveis de interação são pequenos, indicando que há pouca relação entre as variáveis de entrada. Entretanto, as tentativas de regressão demonstraram que o comportamento do programa tem aleatoriedade considerável e é difícil de ser modelado linearmente. De fato, a análise de frequências das respostas se mostrou mais adequada.
