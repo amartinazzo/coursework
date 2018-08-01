@@ -1,0 +1,147 @@
+MAC5742 - Relatório EP2
+=======================
+
+Conteúdo do diretório
+---------------------
+.
+|-- data					- diretório em que são salvas as matrizes geradas nos testes
+|-- functions.c             - funções auxiliares
+|-- functions.h
+|-- generate_matrix_list.cu - gerador de lista de matrizes
+|-- main.c                  - programa de redução de matrizes
+|-- Makefile
+|-- relatorio.txt           - este arquivo
+|-- reduction_cuda.cu       - implementação de redução usando CUDA
+|-- reduction_cuda.h
+|-- reduction_seq.cu        - implementação de redução sequencial
+|-- reduction_seq.h
+|-- test.cu        			- testes de validação
+`-- test_performance.cu     - testes de desempenho
+
+
+Como compilar e rodar
+---------------------
+
+Para compilar e executar o programa:
+
+	$ ./make
+	$ ./main <caminho_lista_matrizes>
+
+Para compilar e executar os teste automatizados:
+
+	$ ./make test
+	$ ./test
+
+Para compilar e executar os testes de performance:
+
+	$ ./make test_performance
+	$ ./test_performance
+
+Para gerar uma lista de matrizes:
+
+	$ ./make generate_matrix_list
+	./generate_matrix <qtd_matrizes> <caminho_lista_matrizes>
+
+
+Descrição do problema/solução
+-----------------------------
+
+Neste exercício-programa, foi desenvolvido um programa em CUDA C (versão 9) para realizar uma operação de redução de um conjunto de matrizes. A redução é uma abordagem de divisão e conquista, na qual o problema é particionado e resolvido em partes, que depois são combinadas para encontrar a solução final. Aqui, fizemos a redução das matrizes a fim de encontrar os mínimos.
+
+O programa recebe como entrada um arquivo .txt contendo n matrizes de tamanho 3 x 3 (equivalente a vetores unidimensionais de tamanho 9). É alocada uma matriz de tamanho 9 x n para receber os valores de entrada. Em cada linha i, são inseridos os elementos da posição i das n matrizes. Assim, o problema se torna a redução de 9 vetores de tamanho n, que resulta num único vetor de tamanho 9 contendo os valores mínimos finais.
+
+O mínimo de cada vetor pode ser encontrado com uma busca em árvore, comparando elementos dois a dois e retornando o mínimo parcial entre eles. Para evitar divergência de branch, o mínimo entre dois inteiros não-negativos x e y pode ser computado com 0.5(abs(x+y) - abs(x-y)). A cada iteração da busca, a quantidade de elementos é reduzida pela metade, até que reste um único elemento, o mínimo global. Esta abordagem é intrinsicamente paralelizável: para um vetor de tamanho n, podem ser disparadas n/2 threads em paralelo.
+
+Tendo o problema modelado, é necessário então estudar um pouco da arquitetura das GPUs da NVIDIA. As threads dentro da GPU ficam organizadas em blocos. Cada bloco tem uma memória compartilhada própria (que não é acessada pelos demais blocos) e pode disparar até 1024 threads, porém a prática mais comum e que costuma desempenhar melhor é usar 256 threads. Assim, se um vetor tem tamanho maior que 2*256 = 512, é necessário particioná-lo e reduzi-lo em mais de um bloco de forma independente.
+
+Na nossa implementação, o kernel de redução é inicializado com um grid de 9 blocos na direção x e ceil(n/256) blocos na direção y, onde n é a dimensão dos vetores (quantidade de matrizes). Cada bloco retorna um mínimo parcial e o kernel é chamado recursivamente na CPU. Como CUDA não tem sincronização global, essa recursão funciona como uma barreira de sincronização entre os blocos. Para facilitar a transmissão de dados entre CPU e GPU, optamos por usar a função cudaMallocManaged(), que aloca as variáveis numa memória unificada.
+
+
+Testes automatizados
+--------------------
+
+Foram implementados testes automatizados para comparação dos resultados do algoritmo de redução em CUDA e da redução sequencial processada na CPU. Os testes focam em cobrir casos de fronteira, tanto do número de threads, quanto de blocos. Além disso, foi implementado um teste para comparar a performance entre o processamento na GPU e CPU. Os testes começam com 500k matrizes e dobram a cada teste até um máximo de 16M. O objetivo dos testes de performance é descobrir quando seria mais vantajosa a utilização da GPU.
+
+
+Resultados
+----------
+
+Executamos os testes automatizados em dois modelos de GPU: a GeForce GTX Titan X e a Tesla K40c. Em todos os casos os valores obtidos na redução na GPU foram os mesmos dos obtidos na CPU.
+
+Para os testes de performance, utilizamos uma máquina com a GPU Tesla K40c e o processador Intel Core i7-4770. Abaixo é mostrada a saída da execução dos testes de desempenho (que computam o tempo de execução total, incluindo a leitura do arquivo de entrada e a transmissão de dados entre CPU e GPU):
+
+	Teste: Redução de 500k matrizes
+	Tempo Cuda: 2338156 us
+	Tempo Sequencial: 423987 us
+	A implementação Sequencial foi mais rápida em: 1914169 us
+
+	Teste: Redução de 1M matrizes
+	Tempo Cuda: 861562 us
+	Tempo Sequencial: 847149 us
+	A implementação Sequencial foi mais rápida em: 14413 us
+
+	Teste: Redução de 2M matrizes
+	Tempo Cuda: 1724705 us
+	Tempo Sequencial: 1692169 us
+	A implementação Sequencial foi mais rápida em: 32536 us
+
+	Teste: Redução de 4M matrizes
+	Tempo Cuda: 3443721 us
+	Tempo Sequencial: 3371158 us
+	A implementação Sequencial foi mais rápida em: 72563 us
+
+	Teste: Redução de 8M matrizes
+	Tempo Cuda: 6856060 us
+	Tempo Sequencial: 6754169 us
+	A implementação Sequencial foi mais rápida em: 101891 us
+
+	Teste: Redução de 16M matrizes
+	Tempo Cuda: 13899346 us
+	Tempo Sequencial: 13470023 us
+	A implementação Sequencial foi mais rápida em: 429323 us
+
+Observa-se que, em todos os casos, a versão sequencial na CPU é mais rápida. Para complementar a análise, foi coletado na Titan X o tempo gasto apenas na redução recursiva, desconsiderando o processamento do arquivo de entrada e a transmissão de dados entre CPU e GPU:
+
+	Teste: Dez matrizes
+	GPU: 151 us
+	CPU: 1 us
+
+	Teste: 255 matrizes (n de threads por bloco - 1)
+	GPU: 136 us
+	CPU: 16 us
+
+	Teste: 256 matrizes (n de threads por bloco)
+	GPU: 132 us
+	CPU: 30 us
+
+	Teste: 257 matrizes (n de threads por bloco + 1)
+	GPU: 168 us
+	CPU: 15 us
+
+	Teste: 10k matrizes
+	GPU: 266 us
+	CPU: 396 us
+
+	Teste: 100k matrizes
+	GPU: 948 us
+	CPU: 3419 us
+
+	Teste: 1M matrizes
+	GPU: 5144 us
+	CPU: 25937 us
+
+	Teste: 10M matrizes
+	GPU: 129931 us
+	CPU: 258743 us
+
+Agora, nota-se que, para uma quantidade suficientemente grande de matrizes (a partir de cerca de 10 mil), a redução na GPU passa a ser mais rápida. No melhor caso, para um milhão de matrizes, a aceleração foi de cinco vezes. Comparando a ordem de grandeza dos tempos do laço de redução e do programa completo, fica evidente que a maior parte do tempo é gasta para processar a entrada e para transmitir dados entre CPU e GPU.
+
+
+Conclusões
+----------
+
+Programar em CUDA exige conhecimento sobre a arquitetura das GPUs e projeto de testes automatizados robustos, dado que o tratamento de erro nativo de CUDA deixa passar alguns problemas sérios. Por exemplo, na fase de debugar o programa, percebemos que, se tentássemos acessar uma posição não alocada em um vetor dentro da GPU, não ocorria falha de segmentação. Ao invés disso, era retornado zero. Em casos como esse, o programa seria executado até o fim e retornaria valores incorretos.
+
+Além disso, verificamos que, mesmo que uma operação na GPU seja muitas vezes mais rápida do que na CPU, o uso da GPU pode não ser vantajoso. Na nossa implementação, a aceleração da GPU não foi suficiente para compensar a latência de copiar os dados para a GPU e depois trazê-los de volta para a CPU. Para o problema que queríamos resolver e a abordagem de solução que adotamos, a resolução em CUDA se mostrou pouco viável. É possível que o desempenho tenha sido prejudicado pelo uso da memória unificada. O uso da memória unificada também impediu que usássemos utilitários como o nvprof, pois precisaríamos ter privilégios do root para rodá-lo com sudo. Numa aplicação real, consideramos que um bom primeiro passo seria paralelizar o programa na CPU com openMP, pois eliminaria as dificuldades de comunicação entre CPU e GPU. Depois, o mais adequado seria particionar o problema entre CPUs paralelizadas/distribuídas e GPU, para não precisar copiar todo o volume de dados para a GPU (conforme a ideia proposta no EP3).
+
+Quanto ao nosso código em CUDA, algumas possíveis melhorias seriam: resolver a redução de um vetor de tamanho n usando n/2 threads (na nossa implementação, disparamos n threads e metade delas fica ociosa logo no começo); gerenciar a memória e as trocas entre CPU e GPU manualmente ao invés de usar a memória unificada do cudaMallocManaged; paralelizar a leitura do arquivo de entrada na CPU.
